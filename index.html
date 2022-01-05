@@ -1,0 +1,119 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.js" integrity="sha512-nYuHvSAhY5lFZ4ixSViOwsEKFvlxHMU2NHts1ILuJgOS6ptUmAGt/0i5czIgMOahKZ6JN84YFDA+mCdky7dD8A==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script async src="https://docs.opencv.org/master/opencv.js" onload="initializeData()" type="text/javascript"></script>
+    <title>Document</title>
+
+    <style>
+      * {
+          margin: 0;
+          padding: 0;
+      }
+      .imgbox {
+          display: grid;
+          height: 100%;
+      }
+      .center-fit {
+          display: block;
+          width: 80%;
+          margin: auto;
+      }
+  </style>
+
+  </head>
+  <body id="bdy">
+    <div id="container">
+        <canvas id="canvasOutput" style="display: none;"></canvas>
+        <video autoplay="true" id="videoElement" style="display: none;"></video>
+    </div>
+    
+    <div class="imgbox">
+       <img class="center-fit" id="image">
+    </div>
+
+  </body>
+
+  <script>
+    const socket = io("http://localhost:8080");
+
+    const video = document.querySelector("#videoElement");
+
+    video.width = 500; 
+    video.height = 281;
+
+    let src;
+    let dst;
+    let cap;
+
+    if (navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function (stream) {
+         video.srcObject = stream;
+            video.play();
+        })
+        .catch(function (err0r) {
+            console.log(err0r)
+            console.log("Something went wrong!");
+        });
+    }
+
+    function processVideo() {
+    // schedule the first one.
+    let streaming = true;
+    const FPS = 22;
+    
+    try {
+      if (!streaming) {
+          // clean and stop.
+          src.delete();
+          dst.delete();
+          return;
+      }
+      let begin = Date.now();
+      // start processing.
+      cap.read(src);
+      cv.cvtColor(src, dst, cv.COLOR_RGB2BGR);
+      cv.imshow('canvasOutput', dst);
+
+      var type = "image/webp"
+      var data = document.getElementById("canvasOutput").toDataURL(type,0.45);
+      data = data.replace('data:' + type + ';base64,', ''); //split off junk at the beginning
+
+      socket.emit('image', data);
+      // schedule the next one.
+      let delay = 1000/FPS - (Date.now() - begin);
+      setTimeout(processVideo, delay);
+  } catch (err) {
+      console.log(err)
+  }
+}
+
+function initializeData(){
+  cv['onRuntimeInitialized']=()=>{
+    src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+    dst = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+    cap = new cv.VideoCapture(video);
+
+    processVideo();
+  };
+}
+    
+
+    socket.on('response_back', function(image){
+        const image_id = document.getElementById('image');
+        document.getElementById("bdy").style.backgroundImage = image;
+        image_id.src = image;
+    });
+
+    function sendMsg() {
+      socket.emit("message", "HELLO WORLD");
+    }
+
+  </script>
+
+</html>
